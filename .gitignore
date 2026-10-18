@@ -1,0 +1,14 @@
+node_modules
+dist
+admin-ui
+static/assets
+static/email/test-emails
+# Never commit local environment values (DB credentials, secrets).
+.env
+.env.*
+# Generated runtime/cache data.
+.tanstack/
+*.log
+# Commit the identity-only Project Link Manifest. Keep all other local Vendure state ignored.
+.vendure/*
+!.vendure/project.json
