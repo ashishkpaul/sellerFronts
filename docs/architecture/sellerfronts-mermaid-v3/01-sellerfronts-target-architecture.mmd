@@ -1,0 +1,131 @@
+flowchart TB
+  subgraph UX["Customer and seller experiences"]
+    CUSTOMER["Customers<br/>Next.js marketplace storefront"]
+    SELLER["Seller Admin<br/>SellerFronts Admin / Dashboard"]
+    OPS["Platform Operator<br/>Admin / Dashboard"]
+  end
+
+  subgraph API["SellerFronts Core · NestJS · GraphQL"]
+    SHOP["Shop API<br/>catalog · search · cart · checkout · account · join"]
+    ADMIN["Admin API<br/>catalog · sellers · orders · campaigns · meetings"]
+    CORE["SellerFronts core<br/>channels · orders · payment state · stock · fulfilment"]
+    subgraph KEEP["Existing plugins to keep or refactor"]
+      LIFECYCLE["SellerLifecycle<br/>seller state / verification"]
+      GEO["SellerGeo"]
+      ORDER["Multivendor → MarketplaceOrder"]
+      SEARCH["SearchSync + stock projection"]
+      PROMO["SellerPromotion"]
+      BBB["BigBlueButtonPlugin"]
+      PAYCORE["PaymentsCore<br/>provider-neutral PaymentGateway target"]
+      DRIVER["DriverFulfillment (optional)"]
+      REV["Reviews · Wishlist · CommerceOps<br/>Cashback funding decision"]
+      TENANCY["Shared tenancy & permissions policy<br/>Seller Admin: own channel only<br/>Platform Operator: explicit cross-tenant permission"]
+    end
+    subgraph BUILD["Target plugins / capability gaps"]
+      RZPAY["RazorpayPayment<br/>one platform checkout account"]
+      PAYOUT["SellerPayoutAccounts<br/>Razorpay Route linked accounts"]
+      FULFIL["SellerFulfilment<br/>self-delivery / pickup"]
+      COURIER["CourierIntegration<br/>provider adapters + tracking"]
+      NOTIFY["Notifications<br/>email · SMS · WhatsApp"]
+      BILL["PlatformBilling<br/>wallet + append-only ledger"]
+      DOMAIN["StorefrontDomain<br/>custom host + DNS/TLS + plan"]
+      CMS["CMS"]
+      RETURNS["Returns"]
+      DASH["PlatformDashboard"]
+      FUTURE["Phase 5 only · future<br/>analytics · premium listings · support"]
+    end
+  end
+
+  subgraph DATA["Data and asynchronous processing"]
+    PG[("PostgreSQL<br/>source of truth")]
+    REDIS[("Redis<br/>cache + BullMQ queues")]
+    WORKER["SellerFronts Worker<br/>indexing · notifications · reconciliation"]
+    EVENTS["SellerFronts EventBus<br/>serialisable domain and charge events"]
+    ES[("Elasticsearch<br/>product + seller read indexes")]
+    ASSETS[("File / object storage<br/>product images · seller logos · banners")]
+    OBS["Observability & recovery<br/>job DLQ · retry policy · webhook replay<br/>traces · reconciliation dashboard"]
+    INBOX[("WebhookInbox target<br/>verify · persist · deduplicate · replay")]
+  end
+
+  subgraph EXT["External integrations"]
+    RAZORPAY["Razorpay platform account<br/>customer checkout + Route transfers"]
+    JUSPAY["Juspay<br/>retire or fallback behind PaymentGateway"]
+    BBBAPI["BigBlueButton HTTPS API"]
+    MAPS["Google Maps / OSM<br/>geocoding"]
+    CARRIERS["Courier APIs<br/>Shiprocket / Delhivery etc."]
+    DRIVERAPI["Platform driver service<br/>optional"]
+    MESSAGING["Email / SMS / WhatsApp providers"]
+  end
+
+  CUSTOMER --> SHOP
+  SELLER --> TENANCY
+  OPS --> TENANCY
+  TENANCY --> ADMIN
+  SHOP --> CORE
+  ADMIN --> CORE
+  CORE --> LIFECYCLE
+  CORE --> GEO
+  CORE --> ORDER
+  CORE --> PROMO
+  CORE --> PAYCORE
+  CORE --> BBB
+  CORE --> REV
+  CORE -. target additions .-> RZPAY
+  CORE -. target additions .-> FULFIL
+  CORE -. target additions .-> COURIER
+  CORE -. target additions .-> NOTIFY
+  CORE -. target additions .-> BILL
+  CORE -. target additions .-> DOMAIN
+  CORE -. target additions .-> CMS
+  CORE -. target additions .-> RETURNS
+  ADMIN -. target operator UI .-> DASH
+  ORDER --> EVENTS
+  EVENTS --> PAYOUT
+  PAYCORE -. target gateway adapter .-> RZPAY
+  RZPAY -. single provider for customer payment .-> RAZORPAY
+  PAYOUT -. Route seller transfers .-> RAZORPAY
+  PAYCORE -. optional fallback decision only .-> JUSPAY
+  BBB <--> PG
+  BBB -. attendee usage event .-> EVENTS
+  BBB <--> BBBAPI
+  LIFECYCLE <--> PG
+  GEO <--> PG
+  GEO <--> MAPS
+  ORDER <--> PG
+  PAYCORE <--> PG
+  PROMO <--> PG
+  PROMO -. campaign charge event .-> EVENTS
+  SEARCH <--> PG
+  DOMAIN -. recurring hosting charge event .-> EVENTS
+  BBB -. target persist-first webhook .-> INBOX
+  RZPAY -. target signed payment events .-> INBOX
+  INBOX --> WORKER
+  INBOX <--> PG
+  EVENTS --> BILL
+  BILL -. shared billing target .-> PG
+  REV <--> PG
+  DRIVER <--> PG
+  FULFIL -. target .-> PG
+  COURIER -. target .-> CARRIERS
+  NOTIFY -. target .-> MESSAGING
+  DRIVER -. optional integration .-> DRIVERAPI
+  CORE <--> PG
+  CORE <--> REDIS
+  REDIS --> WORKER
+  WORKER --> SEARCH
+  SEARCH -. target indexing .-> ES
+  CORE --> ASSETS
+  WORKER --> OBS
+  INBOX --> OBS
+  PAYCORE --> OBS
+  BBB --> OBS
+  OBS --> DASH
+
+  classDef existing fill:#e4f6e8,stroke:#238636,color:#143c25;
+  classDef target fill:#fff1cc,stroke:#b78103,color:#5f4300,stroke-dasharray:5 3;
+  classDef infra fill:#e5f1ff,stroke:#2463a6,color:#102e53;
+  classDef caution fill:#ffe4e6,stroke:#be123c,color:#6f1230;
+  class LIFECYCLE,GEO,ORDER,SEARCH,PROMO,BBB,PAYCORE,DRIVER,REV existing;
+  class TENANCY,RZPAY,PAYOUT,FULFIL,COURIER,NOTIFY,BILL,DOMAIN,CMS,RETURNS,DASH,FUTURE target;
+  class PG,REDIS,WORKER,EVENTS,ES,ASSETS,OBS,INBOX infra;
+  class RAZORPAY,JUSPAY caution;

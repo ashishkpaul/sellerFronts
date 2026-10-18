@@ -1,0 +1,29 @@
+flowchart TB
+  P0["Phase 0 · Upgrade and rename<br/>SellerFronts 3.8 alignment · reviewed migrations<br/>security/session/webhook review · checkout smoke"]
+  ACCESS["Cross-repo tenancy decision<br/>shared permission contract + policy helpers<br/>Seller Admin = own channel; Platform Operator = explicit cross-tenant"]
+  P1["Phase 1 · Marketplace core<br/>SellerTenant · MarketplaceOrder · SellerGeo<br/>MarketplaceSearch · explicit seller ownership"]
+  G1{"Gate 1<br/>Single-cart split works; selected-radius search and<br/>seller serviceability pass; 0% fee verified"}
+  P2["Phase 2 · Money and fulfilment<br/>RazorpayPayment · SellerPayoutAccounts<br/>SellerFulfilment · CourierIntegration · Notifications"]
+  G2{"Gate 2<br/>Two-seller order has no FEE line; Route transfers equal captured amount<br/>minus explicitly allocated shipping/tax; idempotency, refunds<br/>and Route reversals pass"}
+  P3["Phase 3 · Revenue<br/>PlatformBilling · SellerPromotion refactor<br/>StorefrontDomain · BBB billing integration"]
+  G3{"Gate 3<br/>Append-only ledger reconciles; metered wallet charges<br/>and recurring hosting plans work; BBB attendee-hours reconcile"}
+  P4["Phase 4 · Trust and operations<br/>Reviews · CMS · Returns · PlatformDashboard<br/>DriverFulfillment remains optional"]
+  P5["Phase 5 · Future only<br/>analytics · premium listings · support<br/>not part of four launch revenue streams"]
+
+  P0 --> ACCESS --> P1 --> G1
+  G1 -->|pass| P2
+  G1 -->|fail: fix before next phase| P1
+  P2 --> G2
+  G2 -->|pass| P3
+  G2 -->|fail: fix before next phase| P2
+  P3 --> G3
+  G3 -->|pass| P4
+  G3 -->|fail: fix before next phase| P3
+  P4 -. later optional scope .-> P5
+
+  classDef phase fill:#e5f1ff,stroke:#2463a6,color:#102e53;
+  classDef gate fill:#fff1cc,stroke:#b78103,color:#5f4300;
+  classDef decision fill:#e4f6e8,stroke:#238636,color:#143c25;
+  class P0,P1,P2,P3,P4,P5 phase;
+  class G1,G2,G3 gate;
+  class ACCESS decision;

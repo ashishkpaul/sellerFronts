@@ -1,0 +1,44 @@
+flowchart TB
+  subgraph ORDERFLOW["Product order path · 0% marketplace commission target"]
+    CART["One marketplace cart"] --> VALIDATE["Validate seller status, inventory, address<br/>and per-seller shipping eligibility"]
+    VALIDATE --> RESERVE["Reserve available stock at checkout<br/>reservation has timeout / release policy"]
+    RESERVE --> CHECKOUT["Create one Razorpay Order<br/>with server-calculated Route transfer allocations"]
+    CHECKOUT --> CAPTURE["Razorpay confirms payment capture"]
+    CAPTURE --> IDEM["Webhook inbox<br/>verify signature → persist unique event → idempotent processing"]
+    IDEM --> ALLOCATE["Allocate reserved stock after confirmed capture<br/>handle StockShortfallEvent explicitly"]
+    ALLOCATE --> AGG["SellerFronts aggregate marketplace order"]
+    AGG --> SELLERORDERS["One seller order per seller<br/>no platform commission fee line"]
+    SELLERORDERS --> ROUTE["Confirm / reconcile Route transfers attached to Razorpay Order<br/>against seller allocations and explicit shipping/tax rules"]
+    ROUTE --> FULFILL["Seller chooses fulfilment<br/>self-delivery / pickup / courier"]
+    FULFILL --> TRACK["Seller updates state and tracking"]
+    TRACK --> COMPLETE["Aggregate completes after seller orders<br/>meet completion rules"]
+    RESERVE -. cancel / payment timeout .-> RELEASE["Release stock reservation"]
+    ALLOCATE -. allocation failure / shortfall .-> SHORTFALL["StockShortfallEvent handler<br/>recover, backorder, or fail safely"]
+    RECON["Scheduled payment reconciliation<br/>query Razorpay API for late / missing events"] -. replay by event/order key .-> IDEM
+    SELLERORDERS -. seller-level refund request .-> REFUND["Create/refine SellerFronts refund"]
+    REFUND --> RAZORREFUND["Refund customer through Razorpay"]
+    RAZORREFUND --> REVERSAL["Reverse relevant Route transfer(s)"]
+    REVERSAL --> REFUNDRECON["Reconcile order, refund, transfer and reversal ledger"]
+  end
+
+  subgraph REVENUEMODEL["Four launch revenue streams · separate from order commission"]
+    ADS["Paid visibility<br/>campaign budget / sponsored reach"] --> METERED["Metered seller wallet debit"]
+    BANNER["Category banner campaigns<br/>fees, impressions and reporting"] --> METERED
+    BBBUSAGE["BBB attendee-hours<br/>from analytics / meeting callbacks"] --> METERED
+    HOSTING["Custom-domain hosting<br/>monthly / annual recurring plan"] --> SUBSCRIPTION["Recurring subscription charge"]
+    METERED --> WALLET["PlatformBilling<br/>seller wallet + append-only ledger"]
+    SUBSCRIPTION --> WALLET
+    WALLET --> INVOICE["Charge records / invoices<br/>reconciliation and seller balance"]
+    FUTURE["Phase 5 only — not launch revenue<br/>analytics · premium listings · support"]
+  end
+
+  IDEM -. recovery status / alerting .-> OBS["Observability<br/>DLQ · retry · webhook replay · recon dashboard"]
+  RECON --> OBS
+  ROUTE -. 0% order commission .-> FREE["Platform earns from the four services above,<br/>not a percentage of product-order value"]
+
+  classDef current fill:#e4f6e8,stroke:#238636,color:#143c25;
+  classDef target fill:#fff1cc,stroke:#b78103,color:#5f4300,stroke-dasharray:5 3;
+  classDef caution fill:#ffe4e6,stroke:#be123c,color:#6f1230;
+  class CART,VALIDATE,AGG,SELLERORDERS,FULFILL,TRACK,COMPLETE current;
+  class RESERVE,CHECKOUT,CAPTURE,IDEM,ALLOCATE,ROUTE,RECON,RELEASE,SHORTFALL,REFUND,RAZORREFUND,REVERSAL,REFUNDRECON,ADS,BANNER,BBBUSAGE,HOSTING,METERED,SUBSCRIPTION,WALLET,INVOICE,FUTURE,OBS target;
+  class FREE caution;

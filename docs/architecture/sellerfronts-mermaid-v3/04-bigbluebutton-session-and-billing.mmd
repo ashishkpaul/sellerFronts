@@ -1,0 +1,63 @@
+sequenceDiagram
+  autonumber
+  actor Admin as Seller Admin / Platform Operator
+  participant AdminAPI as SellerFronts Admin GraphQL
+  participant ShopAPI as SellerFronts Shop GraphQL
+  participant BBB as BigBlueButtonPlugin
+  participant DB as PostgreSQL
+  participant Q as Redis / BullMQ
+  participant Worker as SellerFronts Worker
+  participant API as BigBlueButton HTTPS API
+  participant Limit as Per-user join rate limiter
+  participant Inbox as WebhookInbox
+  participant EB as SellerFronts EventBus
+  participant Billing as PlatformBilling target
+  participant Recon as BBB reconciliation job
+  actor Learner
+
+  Admin->>AdminAPI: Create / configure room or scheduled session
+  AdminAPI->>BBB: Check tenant scope and management permission
+  BBB->>DB: Persist requested room/session state
+  BBB->>Q: Enqueue provisioning with lock / dedupe key
+  Q-->>Worker: Provisioning job
+  Worker->>BBB: Select BBB server and valid capacity grant
+  BBB->>API: create + configured checksum + meetingEndedURL
+  API-->>BBB: XML SUCCESS / FAILED response
+  BBB->>DB: Persist BBB meeting ID and lifecycle state
+
+  Learner->>ShopAPI: Request meeting join (authenticated)
+  ShopAPI->>BBB: Verify channel, customer, enrollment / entitlement, session window
+  BBB->>Limit: Check user + meeting issuance rate limit
+  alt Within rate limit and access is valid
+    Limit-->>BBB: Allow
+    BBB->>API: Build signed join URL using role + createTime
+    API-->>BBB: Join URL
+    BBB-->>Learner: Return authorized URL / redirect
+    Learner->>API: Join the meeting in browser
+  else Rate limit exceeded or no entitlement
+    Limit-->>BBB: Throttle / deny
+    BBB-->>Learner: Reject join URL issuance
+  end
+
+  API-->>BBB: meetingEnded / attendee analytics / recording callbacks
+  BBB->>BBB: Verify HMAC signature over raw request body
+  BBB->>Inbox: Persist raw event with normalized identity and unique event key
+  Inbox->>DB: Commit inbox row before business processing
+  BBB-->>API: Acknowledge only after durable persistence
+  BBB->>Q: Enqueue inbox event ID
+  Q-->>Worker: Deliver persisted event ID
+  Worker->>Inbox: Claim event and check idempotency / processing state
+  Worker->>BBB: Apply lifecycle or usage transition exactly once
+  BBB->>DB: Update meeting and append usage-ledger facts
+  BBB->>EB: Publish BBB usage charge event
+  EB-->>Billing: Post attendee-hour charge event
+  Billing->>DB: Append charge to seller wallet / billing ledger
+  Worker->>Inbox: Mark processed or schedule retry / DLQ
+
+  Worker->>Recon: Periodically inspect stale / long-running meetings
+  Recon->>API: getMeetingInfo + recording / analytics evidence
+  API-->>Recon: running state, participant counts and available evidence
+  Recon->>DB: Compare lifecycle and usage ledger with callback / analytics evidence
+  Recon->>Q: Enqueue safe reconciliation or alert job when mismatched
+  Note over Recon,DB: getMeetingInfo helps reconcile running or stuck state. Participant counts alone are not exact attendee-hours. Use per-attendee analytics callback data for billing totals.
+  Note over BBB,API: Shared secret stays server-side. Match the checksum algorithm to server-supportedChecksumAlgorithms (SHA-1 through SHA-512 as supported). Do not hard-code SHA-1 or SHA-256 globally.

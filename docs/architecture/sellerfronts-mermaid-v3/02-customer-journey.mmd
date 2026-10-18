@@ -1,0 +1,30 @@
+flowchart LR
+  HOME["Marketplace home<br/>location + search"] --> DISCOVER["Search products and shops<br/>filters · facets · ratings"]
+  DISCOVER --> RANK["Eligibility and ranking<br/>in-stock · seller status · relevance"]
+  RANK --> RADIUS{"Buyer-selected radius tier?<br/>≤5 km free · 5–20 km · 20–100 km<br/>city / region · All India"}
+  RADIUS --> RESULTS["Results in selected tier<br/>organic discovery is free within 5 km"]
+  RESULTS --> DETAIL["Product detail<br/>seller profile · stock · delivery options"]
+  DETAIL --> STORE["Optional seller storefront<br/>/shops/[slug] or custom domain"]
+  DETAIL --> CART["One shared cart<br/>items from multiple sellers"]
+  STORE --> DETAIL
+  CART --> ADDRESS["Address and fulfilment context"]
+  ADDRESS --> SERVICEABLE{"Chosen delivery method<br/>is serviceable for this seller/address?"}
+  SERVICEABLE -->|Yes| SHIPPING["Select shipping per seller<br/>self-delivery · pickup · courier"]
+  SERVICEABLE -->|No| ALTERNATE["Offer valid pickup / delivery alternative,<br/>change address, or remove item"]
+  ALTERNATE --> SHIPPING
+  SHIPPING --> RECHECK["Recalculate totals and re-check<br/>eligible shipping at ArrangingPayment"]
+  RECHECK --> PAY["One customer checkout<br/>platform Razorpay account + Route (target)"]
+  PAY --> PAID["Verified captured payment<br/>order state updated idempotently"]
+  PAID --> SPLIT["Aggregate marketplace order<br/>+ seller order per seller"]
+  SPLIT --> TRACK["Customer tracking<br/>per-seller status + notifications"]
+  TRACK --> COMPLETE["Complete when seller orders<br/>meet configured completion rules"]
+
+  SPONSORED["Active paid campaign<br/>may qualify products for wider-tier visibility"] -. ranking / reach only .-> RESULTS
+  BANNERS["Category banners<br/>location/category targeting"] -. displayed on pages .-> RESULTS
+
+  classDef current fill:#e4f6e8,stroke:#238636,color:#143c25;
+  classDef target fill:#fff1cc,stroke:#b78103,color:#5f4300,stroke-dasharray:5 3;
+  classDef policy fill:#e5f1ff,stroke:#2463a6,color:#102e53;
+  class HOME,DISCOVER,DETAIL,CART,ADDRESS,SHIPPING,TRACK current;
+  class PAY,SPONSORED,BANNERS,STORE target;
+  class RANK,RADIUS,RESULTS,SERVICEABLE,ALTERNATE,RECHECK,PAID,SPLIT,COMPLETE policy;
